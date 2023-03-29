@@ -4,9 +4,13 @@
 % SST and ConceFT is demonstrated
 % The same flow could be appied to conceFT for the synchrosqueezed CWT or others.
 
+%%
+pwd
+%%
 clear ; close all ;
 addpath('./tool') ;
 addpath('./Morse') ;
+%cd 'Time-Frequency Analysis Matlab code'/;
 
 if 0
     cflow = csvread('CFlow.csv');
@@ -18,7 +22,7 @@ if 0
 end
 
 
-if 1
+if 0
     load BP.mat ;
     xm = resample(bp, 100, 1000) ;
     xm = xm' - mean(xm) ;
@@ -28,9 +32,20 @@ if 1
     % try ARMA(1,1)
     snrdb = 5 ; 
     sigma = exp(-snrdb/20) * std(xm) ;
-    noise = armaxfilter_simulate(length(xm)/2, 0, 1, .95, 1, -.5) ;
+    Mdl = arima('Constant',0.5,'AR',{0.7 0.25},'Variance',.1);
+    noise = simulate(Mdl, length(xm)/2);
+    %noise = armaxfilter_simulate(length(xm)/2, 0, 1, .95, 1, -.5) ;
     xm(1:end/2) = xm(1:end/2) + sigma * noise ./ std(noise) ;
 end
+
+if 1
+    load 0009_8min.mat
+    Hz = 300;
+    xm = signal.pleth.y - mean(signal.pleth.y);
+    time = [1:length(xm)]' / Hz;
+
+end
+%%
 
 if 0
     load ta-mECG.mat
@@ -98,7 +113,6 @@ if 0
     xm = clean + noise ;
 
 end
-
 
 
 
@@ -175,7 +189,7 @@ axis([-inf inf 0 20])
 
 
 
-
+%0.3 Hz for resp rate
 % reconstruction
 [h, Dh, t] = hermf(WindowLength, 1, WindowBandwidth) ;
 Band = 0.2 ;
@@ -195,7 +209,7 @@ figure;
 plot(time, xm)
 hold on;
 plot(time(1:HOP:end), real(recon),'r')
-
+%%
 recon2 = resample(recon, 100, 100/HOP) ;
 plot(time, real(recon2),'b', 'linewidth', 2)
 
