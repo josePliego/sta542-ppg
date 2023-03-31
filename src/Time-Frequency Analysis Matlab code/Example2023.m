@@ -174,11 +174,11 @@ axis([-inf inf 0 10])
 
 
 
-keyboard
+
 
 %% curve extraction
-[c] = CurveExt_M(abs(tfrsq)', .5);
-
+[c] = CurveExt_M(abs(tfrsq(10:15,:))', .5);
+%[c] = CurveExt_M(abs(tfrsq)', .5);
 figure ;
 imageSQ(time(1:HOP:end), tfrsqtic*SamplingRate, abs(tfrsq), .995) ; colormap(1-gray) ; title('SST') ;
 hold on;
@@ -190,7 +190,7 @@ axis([-inf inf 0 20])
 
 
 %0.3 Hz for resp rate
-% reconstruction
+%% reconstruction
 [h, Dh, t] = hermf(WindowLength, 1, WindowBandwidth) ;
 Band = 0.2 ;
 
