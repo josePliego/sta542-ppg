@@ -39,7 +39,7 @@ if 0
 end
 
 if 1
-    load 0009_8min.mat
+    load ../../data/0009_8min.mat
     Hz = 300;
     xm = signal.pleth.y - mean(signal.pleth.y);
     time = [1:length(xm)]' / Hz;
@@ -177,13 +177,13 @@ axis([-inf inf 0 10])
 
 
 %% curve extraction
-[c] = CurveExt_M(abs(tfrsq(10:15,:))', .5);
+[c] = CurveExt_M(abs(tfrsq(1:30, :))', 0.5);
 %[c] = CurveExt_M(abs(tfrsq)', .5);
 figure ;
 imageSQ(time(1:HOP:end), tfrsqtic*SamplingRate, abs(tfrsq), .995) ; colormap(1-gray) ; title('SST') ;
 hold on;
-plot(time(1:HOP:end), tfrsqtic(c)*SamplingRate, 'r', 'linewidth',3);
-axis([-inf inf 0 20])
+plot(time(1:HOP:end), tfrsqtic(c)*SamplingRate, 'r', 'linewidth', 3);
+axis([-inf inf 0 5])
 
 
 
@@ -209,6 +209,8 @@ figure;
 plot(time, xm)
 hold on;
 plot(time(1:HOP:end), real(recon),'r')
+
+
 %%
 recon2 = resample(recon, 100, 100/HOP) ;
 plot(time, real(recon2),'b', 'linewidth', 2)
