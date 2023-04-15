@@ -1,0 +1,175 @@
+---
+title: "STA 542 PPG Project"
+---
+
+```{r setup, include=FALSE}
+library(raveio)       # reading in mat files
+library(zoo)          # converting to time series
+library(tidyverse)    # data manipulation
+library(TSA)          # working with time series
+library(R.matlab)     # saving .mat files
+```
+
+
+```{r, midterm-plot-1}
+df = raveio::read_mat("../data/0009_8min.mat")
+model_df = data.frame(
+  t = seq(from=1/300, length.out = length( df$`signal/pleth/y`), by = 1/300),
+  ppg = df$`signal/pleth/y`, 
+  co2 =  df$`signal/co2/y`
+)
+xbound=3000
+## plot main signals across limited range (PLETH is observed, CO2 are ground truth labels)
+ts.plot(df$`signal/pleth/y`[1:xbound], main="Signal Plot", xlim=c(0, xbound), xlab="Index",
+        ylab="Measurment")
+lines(df$`signal/co2/y`[1:xbound], col="red")
+abline(h=0, lty=3)
+abline(v=0, lty=3)
+legend(x=-100,-6.5, legend=c("PPG", "CO2"), col=c("black", "red"),  lty=1:1)
+```
+
+```{r, classify-breathing-phase-plot}
+## response sample
+cutoff = 5000
+samp = data.frame(t = model_df$t[1:cutoff],co2 = model_df$co2[1:cutoff])
+samp = read.zoo(samp); samp = as.ts(samp)
+
+## kernel smoothing makes derivative easier to work with
+kern_smoothed = ksmooth(time(samp), samp, "normal", bandwidth=0.15)
+d = diff(kern_smoothed$y)
+
+## identify the phase of breathing based on a tolerance
+breath_status = d; tolerance = 0.005
+breath_status[which(d > tolerance)] = "EXHALE"
+breath_status[which(d < -tolerance)] = "INHALE"
+breath_status[which(d <= tolerance & d >= -tolerance)] = "NEUTRAL"
+
+## color plot based on results
+breath_status_df = data.frame(
+  t = as.vector(time(samp)),
+  status = c("INHALE", breath_status), 
+  val = as.vector(samp)
+)
+ggplot(breath_status_df, aes(x=t, y=val, color=status)) + geom_point()
+```
+
+
+
+```{r, smooth-ppg-input}
+# to address the voltage issues, smooth the input signal
+## first look at a limited input range
+cutoff = 1000
+samp = data.frame(t = model_df$t[500:cutoff],ppg = model_df$ppg[500:cutoff])
+kern_smoothed = ksmooth(samp$t, samp$ppg, "normal", bandwidth=0.145)
+## compare smoothed version to original
+plot(kern_smoothed$x, kern_smoothed$y, main="Signal Plot", xlab="Index", 
+     ylim=c(-12, 12), ylab="Measurment"); lines(samp$t, samp$ppg)
+
+## smooth the entire signal for all files in data
+smooth_ppg = function(){
+  base_path = "../data/"
+  files = list.files(base_path, pattern="\\min.mat$")
+  for(file in files){
+    df = raveio::read_mat(paste(base_path, file, sep=""))
+    model_df = data.frame(t = seq(from=1/300, length.out = length( df$`signal/pleth/y`), by = 1/300),
+                          ppg = df$`signal/pleth/y`, co2 =  df$`signal/co2/y`)
+    kern_smoothed = ksmooth(model_df$t, model_df$ppg, "normal", bandwidth=0.145)
+    
+    new_name = paste(str_split(file, ".mat")[[1]][1], "_SMOOTHED.mat", sep="")
+    R.matlab::writeMat(paste(base_path, new_name, sep=""), 
+          time = kern_smoothed$x, co2 = model_df$co2, ppg = kern_smoothed$y)
+  }
+}
+
+smooth_ppg()
+```
+
+```{r, derivative-adjustment-ppg-input}
+# to address the voltage issues interpolate values based on local derivative
+## first look at a limited input range
+cutoff = 1000
+samp = data.frame(t = model_df$t[500:cutoff], ppg = model_df$ppg[500:cutoff])
+d_og = diff(samp$ppg)
+plot(d, type="l", ylim=c(-0.5, 0.5))
+lines(d_og, col="red")
+
+## run over entire sequence
+interpolation = function(d_og, samp){
+  k = 25
+  ## identify the index
+  index = which(abs(rollmean(d_og, k=k, align="center")) < 0.0000000001 & 
+        abs(rollmedian(d_og, k=k, align="center")) < 0.0000000001)
+  k_og = index[1]
+  for(i in 1:length(index)){
+    k_ = index[i]
+    # print(k_); print(k_og); print(i)
+    if(!(((k_ - k_og) <= k & i != 1) | d_og[k_] != 0 | sum(d_og[k_:(k_+k)]) != 0)){
+      index_val = index[i]
+      ## get the local derivative around the point (avg over the previous 3)
+      avg_win = 5
+      neg_deriv = mean(d_og[(index_val-avg_win):(index_val-1)])
+      pos_deriv = mean(d_og[(index_val+k):(index_val+k+avg_win)])
+      ## fetch the points for interpolation
+      interpolate = samp[(index_val):(index_val+k),]
+      ## neg interpolation
+      ### take the value at the first row and apply derivative
+      neg_end = round((nrow(interpolate))/2)
+      tm_delta = interpolate[3,"t"] - interpolate[2,"t"]
+      ppg_start = interpolate[2,"ppg"]
+      neg_final = interpolate[2:neg_end,] %>%
+        mutate(row_num = row_number()) %>%
+        mutate(interp = ppg_start + neg_deriv*row_num) %>%
+        select(-row_num)
+      ## add back the first entry
+      neg_final = rbind(cbind(interpolate[1,], interp=interpolate[1,"ppg"]), neg_final)
+      ## pos interpolation
+      ppg_start = neg_final[nrow(neg_final),"interp"]
+      ppg_end = samp[(index_val+k+1), "ppg"]
+      pos_values = seq(from = ppg_start, 
+                       to = ppg_end, 
+                       length.out=(nrow(interpolate)-(neg_end-1)))
+      pos_values = pos_values[1:(length(pos_values)-1)]
+      pos_final = cbind(
+        t = interpolate[(neg_end+1):nrow(interpolate),"t"],
+        ppg = pos_values,
+        interp = pos_values)
+      interp_final = rbind(neg_final, pos_final)
+      samp = samp %>%
+        left_join(interp_final %>% select(-ppg), by=c("t")) %>%
+        mutate(ppg = case_when(
+          !is.na(interp) ~ interp,
+          TRUE ~ ppg
+        )) %>% select(-interp)
+      k_og = index[i]
+    }
+  }
+  return(samp)
+}
+
+## test plot for one sequence
+samp = model_df %>% select(-co2)
+d_og = diff(samp$ppg)
+new_samp = interpolation(d_og=d_og, samp=samp)
+plot(new_samp[1000:3000, "t"], new_samp[1000:3000, "ppg"])
+
+## run over all files
+interpolate_ppg = function(){
+  base_path = "../data/"
+  files = list.files(base_path, pattern="\\min.mat$")
+  for(file in files){
+    df = raveio::read_mat(paste(base_path, file, sep=""))
+    model_df = data.frame(t = seq(from=1/300, length.out = length( df$`signal/pleth/y`), by = 1/300),
+                          ppg = df$`signal/pleth/y`, co2 =  df$`signal/co2/y`)
+    samp = model_df %>% select(-co2)
+    d_og = diff(samp$ppg)
+    samp = interpolation(d_og=d_og, samp=samp)
+    samp = samp %>% inner_join(model_df %>% select(-ppg), by=c("t"))
+    
+    new_name = paste(str_split(file, ".mat")[[1]][1], "_INTERPOLATED.mat", sep="")
+    R.matlab::writeMat(paste(base_path, new_name, sep=""), 
+          time = samp$t, co2 = samp$co2, ppg = samp$ppg)
+  }
+}
+interpolate_ppg()
+```
+
