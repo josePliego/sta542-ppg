@@ -95,7 +95,7 @@ lines(d_og, col="red")
 
 ## run over entire sequence
 interpolation = function(d_og, samp){
-  k = 25
+  k = 49
   ## identify the index
   index = which(abs(rollmean(d_og, k=k, align="center")) < 0.0000000001 & 
         abs(rollmedian(d_og, k=k, align="center")) < 0.0000000001)
