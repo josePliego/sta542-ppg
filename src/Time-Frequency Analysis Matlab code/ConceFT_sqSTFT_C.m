@@ -10,9 +10,9 @@ N = length(x) ;
 %%%% Multitapering %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
        	%% generate the window for short time Fourier transform (STFT)
 [h, Dh, ~] = hermf(WinLen, dim, supp) ;
-%[h] = tftb_window(256*2+1, 'Nuttall') ; 
-%Dh = dwindow(h) ; Dh(end)=Dh(end-1); Dh(1)=Dh(2); 
-%h = h'; Dh = Dh'; fprintf('Use Nuttall\n') ;
+% [h] = tftb_window(256*60+1, 'Nuttall') ; 
+% Dh = dwindow(h) ; Dh(end)=Dh(end-1); Dh(1)=Dh(2); 
+% h = h'; Dh = Dh'; fprintf('Use Nuttall\n') ;
 %=======================================
 
 %[tfr, tfrtic, tfrsq, tfrsqtic] = sqSTFTbase(x, ...
