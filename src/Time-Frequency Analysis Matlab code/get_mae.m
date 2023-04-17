@@ -70,8 +70,11 @@ if harmonics > 1
     end
 end
 
+xm_fin = real(recon)';
+xm_fin = xm_fin - mean(xm_fin);
+
 % MAE
-mae = mean(abs(co2(1:HOP:end) - real(recon)'));
+mae = mean(abs(co2(1:HOP:end) - xm_fin));
 
 
 end
